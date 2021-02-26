@@ -1,5 +1,3 @@
-import 'dart:developer';
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
@@ -90,7 +88,7 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   //Called every 2ms.
-  void playMetronome() {
+  void playMetronome(Timer timer) {
     if (DateTime.now().millisecondsSinceEpoch >=
         lastTimePlayedSound + (60000 / _counter - 1).round()) {
       lastTimePlayedSound = DateTime.now().millisecondsSinceEpoch;
@@ -105,21 +103,19 @@ class _MyHomePageState extends State<MyHomePage> {
         metronomeNote = 0;
       }
     }
-    metronomeTimer.cancel();
-    metronomeTimer = new Timer(Duration(milliseconds: 2), playMetronome);
   }
 
   void startTimeoutMetronome() {
     delay2 = DateTime.now().millisecondsSinceEpoch;
     var diff = delay2 - delay;
     if (metronomeTimer == null) {
-      metronomeTimer = new Timer(
+      metronomeTimer = new Timer.periodic(
           Duration(milliseconds: ((60000 / _counter).round()) - diff),
           playMetronome);
       delay = delay2;
     } else {
       metronomeTimer.cancel();
-      metronomeTimer = new Timer(
+      metronomeTimer = new Timer.periodic(
           Duration(milliseconds: ((60000 / _counter).round()) - diff),
           playMetronome);
       delay = delay2;
