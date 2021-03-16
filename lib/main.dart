@@ -1,8 +1,10 @@
+import 'package:audioplayers/audio_cache.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:audioplayers/audio_cache.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart';
 
 void main() {
   runApp(MyApp());
@@ -13,12 +15,12 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'BPM Tapper',
+      title: 'TapTapTempo',
       theme: ThemeData(
           primarySwatch: Colors.teal,
           visualDensity: VisualDensity.adaptivePlatformDensity,
           fontFamily: 'Poppins'),
-      home: MyHomePage(title: 'BPMTapper'),
+      home: MyHomePage(title: 'TapTapTempo'),
     );
   }
 }
@@ -43,7 +45,7 @@ class _MyHomePageState extends State<MyHomePage> {
   var timer;
 
   //For metronome
-  AudioCache player = AudioCache(prefix: 'assets/metronome/');
+  var player;
   bool metronome = false;
   var metronomeTimer;
   int metronomeNote = 1;
@@ -53,13 +55,22 @@ class _MyHomePageState extends State<MyHomePage> {
   var loop = false;
   int lastTimePlayedSound = 0;
 
+  @override
+  void initState() {
+    super.initState();
+
+    if (kIsWeb)
+      player = new AudioPlayer();
+    else
+      player = new AudioCache(prefix: 'assets/metronome/');
+  }
+
   void startTimeoutReset() {
-    if (timer == null) {
+    if (timer == null)
       timer = new Timer(const Duration(milliseconds: 2000), reset);
-    } else {
+    else
       timer.cancel();
-      timer = new Timer(const Duration(milliseconds: 2000), reset);
-    }
+    timer = new Timer(const Duration(milliseconds: 2000), reset);
   }
 
   void reset() {
@@ -71,6 +82,9 @@ class _MyHomePageState extends State<MyHomePage> {
     last = 0;
     _diff = 0;
     metronomeNote = 1;
+    if (metronomeTimer != null) {
+      metronomeTimer.cancel();
+    }
     setState(() {
       _last = 0;
       _counter = 0;
@@ -81,22 +95,27 @@ class _MyHomePageState extends State<MyHomePage> {
     reset();
     metronome = !metronome;
     if (metronome) {
-      player.loadAll(['first.wav', 'last.wav']);
+      if (!kIsWeb) player.loadAll(['first.wav', 'last.wav']);
     } else {
-      player.clearCache();
+      if (!kIsWeb) player.clearCache();
     }
   }
 
-  //Called every 2ms.
   void playMetronome(Timer timer) {
     if (DateTime.now().millisecondsSinceEpoch >=
         lastTimePlayedSound + (60000 / _counter - 1).round()) {
       lastTimePlayedSound = DateTime.now().millisecondsSinceEpoch;
       if (metronomeNote == 0) {
-        player.play('first.wav', volume: 1, mode: PlayerMode.LOW_LATENCY);
+        if (kIsWeb)
+          player.play('assets/metronome/first.wav', isLocal: true);
+        else
+          player.play('first.wav', mode: PlayerMode.LOW_LATENCY);
         metronomeNote++;
       } else {
-        player.play('last.wav', volume: 1, mode: PlayerMode.LOW_LATENCY);
+        if (kIsWeb)
+          player.play('assets/metronome/last.wav', isLocal: true);
+        else
+          player.play('last.wav', mode: PlayerMode.LOW_LATENCY);
         metronomeNote++;
       }
       if (metronomeNote > 3) {
@@ -125,7 +144,10 @@ class _MyHomePageState extends State<MyHomePage> {
   void _incrementCounter() {
     if (_last == 0) {
       if (metronome) {
-        player.play('first.wav', volume: 1, mode: PlayerMode.LOW_LATENCY);
+        if (kIsWeb)
+          player.play('assets/metronome/first.wav', isLocal: true);
+        else
+          player.play('first.wav', mode: PlayerMode.LOW_LATENCY);
       } else {
         timer = new Timer(const Duration(milliseconds: 2000), reset);
       }
@@ -182,80 +204,163 @@ class _MyHomePageState extends State<MyHomePage> {
       return false;
     }
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
+    void onEventKey(RawKeyEvent event) async {
+      if (event.runtimeType.toString() == 'RawKeyUpEvent') {
+        if (event.logicalKey == LogicalKeyboardKey.space) {
+          _incrementCounter();
+        }
+      }
+    }
+
+    if (kIsWeb) {
+      return Scaffold(
         backgroundColor: Colors.black,
-        title: const Text('タップタップテンポ'),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.max,
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: <Widget>[
-            Expanded(
-                flex: 1,
-                child: InkWell(
-                  splashColor: Colors.teal,
-                  highlightColor: null,
-                  onTap: _incrementCounter,
-                  onLongPress: reset,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: <Widget>[
-                      Container(
-                        width: MediaQuery.of(context).size.width,
-                        decoration: confirmBpm()
-                            ? BoxDecoration(
-                                border: Border.all(
-                                  color: Colors.teal,
-                                  width: 1,
-                                ),
-                                borderRadius: BorderRadius.circular(50))
-                            : null,
-                        child: Text(
-                          '$_counter',
-                          style: TextStyle(
-                              fontSize: 120,
-                              color: Colors.white,
-                              fontWeight: FontWeight.w300),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      Container(
-                          padding: const EdgeInsets.all(8.0),
+        body: RawKeyboardListener(
+          focusNode: FocusNode(),
+          onKey: onEventKey,
+          autofocus: true,
+          child: Column(
+            mainAxisSize: MainAxisSize.max,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              Expanded(
+                  flex: 1,
+                  child: InkWell(
+                    splashColor: Colors.teal,
+                    highlightColor: null,
+                    onTap: _incrementCounter,
+                    onLongPress: reset,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: <Widget>[
+                        Container(
+                          width: MediaQuery.of(context).size.width,
+                          decoration: confirmBpm()
+                              ? BoxDecoration(
+                                  border: Border.all(
+                                    color: Colors.teal,
+                                    width: 1,
+                                  ),
+                                  borderRadius: BorderRadius.circular(50))
+                              : null,
                           child: Text(
-                            'Beats Per Minute',
-                            style: TextStyle(fontSize: 42, color: Colors.white),
-                            textAlign: TextAlign.center,
-                          )),
-                      Container(
-                          padding: const EdgeInsets.all(8.0),
-                          child: Text(
-                            metronome
-                                ? 'Metronome mode \n Tap on the screen to set a tempo \n Press and hold to reset'
-                                : (_last == 0
-                                    ? 'BPM mode \n Tap on the screen to start \n Press and hold to reset or wait 2 sec'
-                                    : '$_diff ms    avg: $_avg \n  \n'),
+                            '$_counter',
                             style: TextStyle(
-                                fontSize: 16,
+                                fontSize: 120,
                                 color: Colors.white,
                                 fontWeight: FontWeight.w300),
                             textAlign: TextAlign.center,
-                          )),
-                    ],
-                  ),
-                ))
-          ],
+                          ),
+                        ),
+                        Container(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Text(
+                              'Beats Per Minute',
+                              style:
+                                  TextStyle(fontSize: 42, color: Colors.white),
+                              textAlign: TextAlign.center,
+                            )),
+                        Container(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Text(
+                              metronome
+                                  ? 'Metronome mode \n Press spacebar or click screen to set tempo \n Press and hold to reset'
+                                  : (_last == 0
+                                      ? 'BPM mode \n Press spacebar or click screen to start \n Press and hold or wait 2 sec to reset'
+                                      : '$_diff ms    avg: $_avg \n  \n'),
+                              style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w300),
+                              textAlign: TextAlign.center,
+                            )),
+                      ],
+                    ),
+                  ))
+            ],
+          ),
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: toggleMetronome,
-        child: Icon(CupertinoIcons.metronome),
-        backgroundColor: Colors.teal,
-      ),
-    );
+        floatingActionButton: FloatingActionButton(
+          onPressed: toggleMetronome,
+          child: Icon(CupertinoIcons.metronome),
+          backgroundColor: Colors.teal,
+        ),
+      );
+    } else {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.max,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              Expanded(
+                  flex: 1,
+                  child: InkWell(
+                    splashColor: Colors.teal,
+                    highlightColor: null,
+                    onTap: _incrementCounter,
+                    onLongPress: reset,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: <Widget>[
+                        Container(
+                          width: MediaQuery.of(context).size.width,
+                          decoration: confirmBpm()
+                              ? BoxDecoration(
+                                  border: Border.all(
+                                    color: Colors.teal,
+                                    width: 1,
+                                  ),
+                                  borderRadius: BorderRadius.circular(50))
+                              : null,
+                          child: Text(
+                            '$_counter',
+                            style: TextStyle(
+                                fontSize: 120,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w300),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                        Container(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Text(
+                              'Beats Per Minute',
+                              style:
+                                  TextStyle(fontSize: 42, color: Colors.white),
+                              textAlign: TextAlign.center,
+                            )),
+                        Container(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Text(
+                              metronome
+                                  ? 'Metronome mode \n Tap on the screen to set a tempo \n Press and hold to reset'
+                                  : (_last == 0
+                                      ? 'BPM mode \n Tap on the screen to start \n Press and hold or wait 2 sec to reset'
+                                      : '$_diff ms    avg: $_avg \n  \n'),
+                              style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w300),
+                              textAlign: TextAlign.center,
+                            )),
+                      ],
+                    ),
+                  ))
+            ],
+          ),
+        ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: toggleMetronome,
+          child: Icon(CupertinoIcons.metronome),
+          backgroundColor: Colors.teal,
+        ),
+      );
+    }
   }
 }
