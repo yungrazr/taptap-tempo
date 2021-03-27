@@ -205,6 +205,8 @@ class _MyHomePageState extends State<MyHomePage> {
     }
 
     void onEventKey(RawKeyEvent event) async {
+      print(event.runtimeType);
+      print(event.logicalKey);
       if (event.runtimeType == RawKeyUpEvent) {
         if (event.logicalKey == LogicalKeyboardKey.space) {
           _incrementCounter();
